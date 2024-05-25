@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define the AWS credentials ID
+        AWS_CREDENTIALS_ID = 'aws-ecr-credentials'
+        // Define the AWS region where your ECR is located
+        AWS_REGION = 'us-west-2'
+        // Define the ECR repository URI
+        ECR_REPO_URI = '123456789012.dkr.ecr.us-west-2.amazonaws.com/my-repo'
+        // Define the Docker image tag
+        IMAGE_TAG = 'latest'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout code from your source repository
+                checkout scm
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${ECR_REPO_URI}:${IMAGE_TAG}")
+                }
+            }
+        }
+        
+        stage('Login to ECR') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    sh '$(aws ecr get-login --no-include-email --region ${AWS_REGION})'
+                }
+            }
+        }
+        
+        stage('Push Docker Image to ECR') {
+            steps {
+                script {
+                    docker.withRegistry("https://${ECR_REPO_URI}", "${AWS_CREDENTIALS_ID}") {
+                        dockerImage.push("${IMAGE_TAG}")
+                    }
+                }
+            }
+        }
+    }
+}
